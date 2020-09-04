@@ -6,20 +6,29 @@ const request = require("request");
 const cors = require("cors");
 const Razorpay = require('razorpay');
 
+const morgan = require('morgan')
+const logger = require('./logger.js');
+const dotenv = require('dotenv');
+dotenv.config();
+
 const instance = new Razorpay({
-    key_id: "rzp_test_38t5Sl6d0qAXHO",
-    key_secret: "nzFyhm3xJzaGj6rQW2GguS3r"
+    key_id: process.env.RAZORPAYID,
+    key_secret: process.env.RAZORPAYSECRET
 });
 
 
-var port = process.env.PORT || 8001;
+let port = process.env.PORT || 8001;
 app.use(cors());
 app.use(bodyParser.json());
+
+app.use(morgan(':date[iso] :method :url :body :status ', { stream: logger.stream }));
+morgan.token('body', (req) => JSON.stringify(req.body));
+
 
 app.post("/donate", function(req, res) {
 
     const amt = req.body.amount * 100;
-    
+
 
     console.log(JSON.stringify(req.body));
     //check if capcha token exists
@@ -33,13 +42,14 @@ app.post("/donate", function(req, res) {
         uri: "https://www.google.com/recaptcha/api/siteverify",
         json: true,
         form: {
-            secret: "6LfYzaQZAAAAAHrGQfs5S2orZ16XMvFNNFqObg4c",
+            secret: process.env.CAPTCHASECRET,
             response: req.body.recaptchaToken
         }
     };
 
     request.post(verifyCaptchaOptions, function(err, response, body) {
         if (err) {
+            logger.err(err);
             return res.status(500).json({ message: "oops, something went wrong on our side" });
         }
 
@@ -51,24 +61,20 @@ app.post("/donate", function(req, res) {
     });
 
     //build order id
-    var options = {
+    let options = {
         amount: amt, // amount in the smallest currency unit
         currency: "INR",
         receipt: "order_rcptid_11",
         payment_capture: '0'
     };
 
-    try{
 
-    }catch(err){
-        console.log(err);
-    }
     instance.orders.create(options, function(err, order) {
 
-        if(err){
-            console.log(err);
+        if (err) {
+            logger.err(err)
         }
-        console.log(order);
+        logger.info(order)
         return res.status(200).json({ order });
     });
 
@@ -79,7 +85,7 @@ app.post("/donate", function(req, res) {
 });
 
 app.get('/', function(req, res) {
-    res.send('server running');
+    res.send(`Server running at port ${port}`);
 })
 
 app.listen(port);
